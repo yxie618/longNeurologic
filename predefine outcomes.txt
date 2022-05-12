@@ -1,0 +1,188 @@
+
+/**in dim, ICD10 with "."*/
+data metaicd10;
+set DIM_RB03.ICD10(KEEP=ICD10Code ICD10SID);
+IF ICD10Code IN: ('G45') then TCIA=1;
+IF ICD10Code IN: ('G46','I63') then  stroke=1;
+IF ICD10Code IN: ('R43.0','R43.1') then smell=1;
+IF ICD10Code IN: ('R43.2') then taste=1;
+IF ICD10Code IN: ('H90','H91','H93') then hearing=1;
+IF ICD10Code IN: ('H53','H54','H34','H35.6') then vision=1;
+IF ICD10Code IN: ('G30') then alzheimer=1;
+IF ICD10Code IN: ('R41.1','R41.2','R41.3','G31','F03') then amnesia=1;
+IF ICD10Code IN: ('G04.0') then ADE=1;
+IF ICD10Code IN: ('G04.3') then ANHE=1;
+IF ICD10Code IN: ('G04.8','G04.9') then othere=1;
+IF ICD10Code IN: ('G40') then seizure=1;
+IF ICD10Code IN: ('G43') then migraine=1;
+IF ICD10Code IN: ('G44') then headache=1;
+IF ICD10Code IN: ('G47') then sleep=1;
+IF ICD10Code IN: ('G35') then ms=1;
+IF ICD10Code IN: ('G61.0') then GBS=1;
+IF ICD10Code IN: ('G51') then facial=1;
+IF ICD10Code IN: ('G61.1','G61.8','G61.9','G62') then poly=1;
+IF ICD10Code IN: ('G56','G57') then mono=1;
+IF ICD10Code IN: ('R20.2') then paresthesia=1;
+IF ICD10Code IN: ('I95','I10') then pressure=1;
+IF ICD10Code IN: ('G20') then park=1;
+IF ICD10Code IN: ('G25.0','G25.2') then tremor=1;
+IF ICD10Code IN: ('G25.3') then myoclonus=1;
+IF ICD10Code IN: ('G24') then dystonia=1;
+IF ICD10Code IN: ('R53') then fatigue=1;
+IF ICD10Code IN: ('R42') then dizziness=1;
+IF ICD10Code IN: ('M25.5') then joint=1;
+IF ICD10Code IN: ('M79.1','M62.81') then myalgia=1;
+IF ICD10Code IN: ('G72') then myopathy=1;
+IF ICD10Code IN: ('G90.0','G90.3','G90.4','G90.5','G90.8','G90.9') then dysauto=1;
+IF ICD10Code IN: ('R40.0') then somnolence=1;
+IF ICD10Code IN: ('R25') then abnormal=1;
+IF ICD10Code IN: ('I63.6') then cvst=1;
+
+
+if max(TCIA,stroke,smell,taste,hearing,vision,alzheimer,amnesia,ADE,ANHE,othere,
+	   seizure,migraine,headache,sleep,ms,GBS,facial,poly,mono,paresthesia,
+       pressure,park,tremor,myoclonus,dystonia,fatigue,dizziness,
+       joint,myalgia,myopathy,dysauto,somnolence,abnormal,cvst)=. then delete;
+run;
+
+
+
+
+**************************;
+* Inpatient diagnosis;
+DATA Inpat_ICD10;
+SET A107_SRC.Inpat_InpatientDiagnosis(KEEP=patientsid DischargeDateTime icd10sid);
+	WHERE DHMS(MDY(03, 01, 2016), 00, 00, 00) <= DischargeDateTime < DHMS(MDY(12, 31, 2021), 00, 00, 00);
+	RENAME DischargeDateTime=Vdiagnosisdatetime;
+RUN;
+PROC SQL;
+CREATE TABLE Inpat_ICD10_2 AS
+SELECT a.*,b.* from Inpat_ICD10 AS a, metaicd10 AS b
+	WHERE a.icd10sid=b.icd10sid;
+QUIT;
+
+* Outpatient Diagnosis;
+DATA Outpat_ICD10;
+SET A107_SRC.Outpat_VDiagnosis(KEEP=patientsid Vdiagnosisdatetime icd10sid);
+	WHERE DHMS(MDY(03, 01, 2016), 00, 00, 00) <= Vdiagnosisdatetime < DHMS(MDY(12, 31, 2021), 00, 00, 00);
+RUN;
+PROC SQL;
+CREATE TABLE Outpat_ICD10_2 AS
+SELECT a.*,b.* from Outpat_ICD10 AS a, metaicd10 AS b
+	WHERE a.icd10sid=b.icd10sid;
+QUIT;
+
+* Combine data sets;
+DATA combine1;
+SET  Inpat_ICD10_2 Outpat_ICD10_2;
+	Date = datepart(Vdiagnosisdatetime);
+	FORMAT Date MMDDYY10.;
+RUN;
+
+
+PROC SQL;
+CREATE TABLE outcome AS
+SELECT R.PatientICN, L.* 
+	FROM combine1 L
+INNER JOIN A107_SRC.CohortCrosswalk(KEEP=PatientSID PatientICN) R
+	ON L.PatientSID=R.PatientSID;
+QUIT;
+
+
+
+proc sql;
+create table outcome2 as
+select a.patienticn, a.cohort, a.t0,a.deathdate, a.endoffollow, b.* from
+data.cohort as a left join outcome as b on 
+a.patienticn=b.patienticn;
+quit;
+
+proc sort data=outcome2;
+by patienticn cohort descending date;
+run;
+
+
+data outcome3;
+set outcome2;
+by patienticn cohort;
+array code[35] TCIA stroke smell taste hearing vision alzheimer amnesia ADE ANHE othere 
+	   seizure migraine headache sleep ms GBS facial poly mono paresthesia 
+       pressure park tremor myoclonus dystonia fatigue dizziness 
+       joint myalgia myopathy dysauto somnolence abnormal cvst;
+
+array time[35] t_TCIA t_stroke t_smell t_taste t_hearing t_vision t_alzheimer t_amnesia t_ADE 
+	   t_ANHE t_othere t_seizure t_migraine t_headache t_sleep t_ms t_GBS t_facial 
+	   t_poly t_mono t_paresthesia t_pressure t_park t_tremor t_myoclonus 
+	   t_dystonia t_fatigue t_dizziness t_joint t_myalgia t_myopathy t_dysauto t_somnolence t_abnormal t_cvst;
+
+array out[35] TCIA_out stroke_out smell_out taste_out hearing_out vision_out alzheimer_out amnesia_out 
+	   ADE_out ANHE_out othere_out seizure_out migraine_out headache_out sleep_out ms_out GBS_out 
+	   facial_out poly_out mono_out paresthesia_out pressure_out 
+	   park_out tremor_out myoclonus_out dystonia_out fatigue_out dizziness_out joint_out myalgia_out myopathy_out 
+	   dysauto_out somnolence_out abnormal_out cvst_out;
+
+array hx[35] preTCIA prestroke presmell pretaste prehearing prevision prealzheimer preamnesia preADE preANHE preothere 
+	   preseizure premigraine preheadache presleep prems preGBS prefacial prepoly premono preparesthesia 
+       prepressure prepark pretremor premyoclonus predystonia prefatigue predizziness 
+       prejoint premyalgia premyopathy predysauto presomnolence preabnormal precvst;
+
+retain t_TCIA t_stroke t_smell t_taste t_hearing t_vision t_alzheimer t_amnesia t_ADE 
+	   t_ANHE t_othere t_seizure t_migraine t_headache t_sleep t_ms t_GBS t_facial 
+	   t_poly t_mono t_paresthesia t_pressure t_park t_tremor t_myoclonus 
+	   t_dystonia t_fatigue t_dizziness t_joint t_myalgia t_myopathy t_dysauto t_somnolence t_abnormal t_cvst
+	   TCIA_out stroke_out smell_out taste_out hearing_out vision_out alzheimer_out amnesia_out 
+	   ADE_out ANHE_out othere_out seizure_out migraine_out headache_out sleep_out ms_out GBS_out 
+	   facial_out poly_out mono_out paresthesia_out pressure_out 
+	   park_out tremor_out myoclonus_out dystonia_out fatigue_out dizziness_out joint_out myalgia_out myopathy_out 
+	   dysauto_out somnolence_out abnormal_out cvst_out
+       preTCIA prestroke presmell pretaste prehearing prevision prealzheimer preamnesia preADE preANHE preothere 
+	   preseizure premigraine preheadache presleep prems preGBS prefacial prepoly premono preparesthesia 
+       prepressure prepark pretremor premyoclonus predystonia prefatigue predizziness 
+       prejoint premyalgia premyopathy predysauto presomnolence preabnormal precvst;
+
+
+if first.cohort then do i=1 to 35;
+time[i]=min(deathdate,endoffollow)-t0; 
+out[i]=0;
+hx[i]=0;
+end;
+
+do q=1 to 35;
+if code[q]=1 then do;
+if date<t0 and date>=t0-365.25*2 then hx[q]=1;
+if date>t0+29 and date<=endoffollow then do; out[q]=1; time[q]=date-t0;end;
+end;
+end;
+
+if last.cohort then output;
+run;
+
+data aaa;
+merge data.cohort(in=a) outcome3(in=b keep=patienticn cohort 
+t_TCIA t_stroke t_smell t_taste t_hearing t_vision t_alzheimer t_amnesia t_ADE 
+	   t_ANHE t_othere t_seizure t_migraine t_headache t_sleep t_ms t_GBS t_facial 
+	   t_poly t_mono t_paresthesia t_pressure t_park t_tremor t_myoclonus 
+	   t_dystonia t_fatigue t_dizziness t_joint t_myalgia t_myopathy t_dysauto t_somnolence t_abnormal t_cvst
+	   TCIA_out stroke_out smell_out taste_out hearing_out vision_out alzheimer_out amnesia_out 
+	   ADE_out ANHE_out othere_out seizure_out migraine_out headache_out sleep_out ms_out GBS_out 
+	   facial_out poly_out mono_out paresthesia_out pressure_out 
+	   park_out tremor_out myoclonus_out dystonia_out fatigue_out dizziness_out joint_out myalgia_out myopathy_out 
+	   dysauto_out somnolence_out abnormal_out cvst_out
+       preTCIA prestroke presmell pretaste prehearing prevision prealzheimer preamnesia preADE preANHE preothere 
+	   preseizure premigraine preheadache presleep prems preGBS prefacial prepoly premono preparesthesia 
+       prepressure prepark pretremor premyoclonus predystonia prefatigue predizziness 
+       prejoint premyalgia premyopathy predysauto presomnolence preabnormal precvst);
+
+by patienticn cohort;
+if a;
+
+run;
+
+
+
+
+
+data data.cohort;
+set aaa;
+run;
+

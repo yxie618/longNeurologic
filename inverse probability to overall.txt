@@ -1,0 +1,158 @@
+libname data '/data/dart/2014/ORD_AlAly_201403107D/Evan/Projects/Long COVID CNS/Data';
+
+%macro subgroup(outcome,  name);
+
+data data.iptwweight_&outcome ;
+set data.cohort;
+keep patienticn cohort cohort4arm pre&outcome t_&outcome &outcome._out ;
+run; 
+
+data data.iptwresult_&outcome ;
+set _null_;
+length outcome $32. subgroup $128.;
+run;
+
+
+data cohort;
+set data.cohort ;
+where pre&outcome ^=1 ;
+run;
+
+
+
+data hxmodel_hba1c;
+merge cohort(in=a) data.hxicd10 data.hxmed data.hxlab;
+by PatientICN cohort;
+if a;
+run;
+
+
+/********************************************   CONTEMPORARY COMPARISON    *******************************************/
+
+*sort by largest RR;
+proc sort data=hdps;
+by descending rr_neg1;
+run;
+
+*pick top 100 with highest RR;
+data hdps;
+set hdps;
+if _n_<=100;
+run;
+
+*macro variable '&hdvs' of 100 high dimensional covariate names to use;
+data eee;
+set hdps;
+length cov $32767.;
+retain cov;
+cov=catx(' ',cov,_name_); 
+call symput('hdvs',cov);
+run;
+
+*select 100 high dimensional covariates;
+data contemp;
+set hxmodel_hba1c;
+run;
+
+
+
+*predefined and hdvs covariates, get propensity score ;
+*do imputation and splines before this step;
+proc logistic data=contemp;
+class cohort  sex race smoke longterm CVD Diabetes HTN CLD CKD ;
+model cohort = 	sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X2-_X22 hxnin hyperlip &hdvs/link=glogit;
+output out=ps (keep=patienticn cohort _level_ ps) pred=ps;
+run;
+
+data ps;
+set ps;
+where cohort=_level_;
+run;
+
+proc freq data=contemp;
+table cohort/out=zzz;
+run;
+
+data zzz;
+set zzz;
+if index(cohort,"pos") then call symput("p0",percent/100);
+if index(cohort,"neg1") then call symput("p1",percent/100);
+if index(cohort,"neg2") then call symput("p2",percent/100);
+run;
+
+data ps_sum;
+merge ps_pos ps_neg1 ps_neg2;
+
+
+if cohort="pos" then ate_&name._&outcome._cont=&p0/(ps);
+if cohort="neg1" then ate_&name._&outcome._cont=&p1 /(ps);
+if cohort="neg2" then ate_&name._&outcome._cont=&p2 /(ps);
+ate_&name._&outcome._hist=ate_&name._&outcome._cont;
+keep patienticn cohort ate_&name._&outcome._cont ate_&name._&outcome._hist;
+run;
+
+proc sort data=ps_sum;
+by patienticn cohort;
+run;
+data data.iptwweight_&outcome;
+merge data.iptwweight_&outcome (in=a) ps_sum;
+by PatientICN cohort;
+if a;
+run;
+
+/***model***/
+
+data model;
+set data.iptwweight_&outcome;
+
+if ate_&name._&outcome._cont>30 then ate_&name._&outcome._cont =30;
+run;
+
+
+
+
+ods output parameterestimates = pe;
+proc phreg data=model(where=(ate_&name._&outcome._cont^=.)) covs(aggregate) ;
+class cohort (ref="pos")  / param=ref;
+model t_&outcome *&outcome._out(0)=cohort / rl;
+weight ate_&name._&outcome._cont;
+id PatientICN;
+
+run;
+
+
+
+data pe;
+set pe;
+if classVal0="neg1" then do;
+call symput ("hr_1",1/hazardratio);
+call symput ("lhr_1",1/hruppercl);
+call symput ("uhr_1",1/hrlowercl);
+end;
+if classVal0="neg2" then do;
+call symput ("hr_2",1/hazardratio);
+call symput ("lhr_2",1/hruppercl);
+call symput ("uhr_2",1/hrlowercl);
+end;
+run;
+
+data data.iptwresult_&outcome;
+set data.iptwresult_&outcome pe ;
+run;
+%mend;
+
+%let list= any;
+
+
+%macro loop(begin,end);
+%do q=&begin %to &end;
+%let manifest=%scan(&&list,&q);
+
+%subgroup (outcome=&&manifest  ,name=all);
+
+%end;
+%mend;
+
+%loop(1,1);
+

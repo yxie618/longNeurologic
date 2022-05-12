@@ -1,0 +1,134 @@
+
+%macro spline(outcome);
+
+data aaa;
+set data.cohort;
+
+where pre&outcome ^=1  ;
+run;
+
+
+proc glimmix data= aaa (drop=_X2--_X22) outdesign=spline  nofit;
+effect agesp=spline( age /naturalcubic details basis=tpf(noint) knotmethod=PERCENTILELIST(10 35 65 90)) ;
+
+model age=agesp;
+run;
+
+
+data bbb;
+merge aaa spline(keep=_X2 _X3 _X4 rename=(_X2=age1 _X3=age2 _X4=age3));
+
+
+run;
+
+
+data bbb;
+set bbb;
+if cohort="neg1" then cage1=age1; else cage1=0;
+if cohort="neg1" then cage2=age2; else cage2=0;
+if cohort="neg1" then cage3=age3; else cage3=0;
+if cohort="neg1" then neg1=1;else neg1=0;
+
+if cohort="neg2" then hage1=age1; else hage1=0;
+if cohort="neg2" then hage2=age2; else hage2=0;
+if cohort="neg2" then hage3=age3; else hage3=0;
+if cohort="neg2" then neg2=1;else neg2=0;
+run;
+
+
+
+proc phreg data=bbb outest=est covout;
+class sex race smoke;
+model t_&outcome * &outcome._out(0)= sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X6-_X22 hxnin hyperlip age1 age2 age3 neg1 neg2 cage1 cage2 cage3 hage1 hage2 hage3;
+where pre&outcome ^=1;
+run;
+
+data est;
+set est;
+keep _type_ _name_ neg1--hage3;
+if _n_=1 or _n_>=35;
+run;
+
+data pe cov;
+set est;
+if _n_=1 then output pe;
+else output cov;
+run;
+
+    
+ 
+proc iml;
+use cov;
+read all var _all_ into cov2;
+use pe;
+read all var _all_ into pe2;
+Numsamples=1000;
+call randseed(12);
+X=randnormal(numsamples,pe2,cov2);
+create zzz from x;
+append from x;
+close zzz;
+quit;
+
+proc corr data=zzz;
+run;
+
+
+data zzz;
+set zzz;
+z=1;
+run;
+
+data list;
+set bbb;
+z=1;
+age1=round(age1,0.1);
+keep age1--age3 z;
+run;
+proc sort data=list out=list nodupkey;
+by age1 ;
+run;
+
+proc sql;
+create table pe as 
+select a.*, b.* from list as a, zzz as b
+where a.z=b.z;
+quit;
+
+/**from col1 to col8:
+neg1 neg2 cage1 cage2 cage3 hage1 hage2 hage3 */
+data pe2;
+set pe;
+conthr=1/exp(col1+age1*col3+age2*col4+age3*col5);
+histhr=1/exp(col2+age1*col6+age2*col7+age3*col8);
+run;
+
+proc univariate data=pe2 noprint;
+class age1;
+var conthr histhr;
+output out=ci var=conthr histhr pctlpre=cont hist pctlpts=50 2.5 97.5;
+run;
+
+data data.spline_&outcome ;
+set ci;
+outcome="&outcome" ;
+knot="10 35 65 90";
+keep age1 cont50 cont2_5 cont97_5 hist50 hist2_5 hist97_5 outcome;
+run;
+
+%mend;
+
+%spline(other);
+
+/*
+%spline(cere);
+%spline(cognition);
+%spline(peripheral);
+%spline(episodic);
+%spline(move);
+%spline(mental);
+%spline(msk);
+%spline(sensory);
+%spline(other);
+%spline(any);

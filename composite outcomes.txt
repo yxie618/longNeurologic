@@ -1,0 +1,80 @@
+
+data data.cohort;
+set data.cohort;
+/*if max(PreStroke,PreTIA)>0 then PreCerebrovascular=1; else PreCerebrovascular=0;
+Cerebrovascular_out=max(stroke_out,TIA_out);
+t_Cerebrovascular=min(t_stroke,t_TIA);
+
+if max(PreAfib,PreTachy,PreAflu,PreVarr,PreBrady)>0 then PreDysrhythmia=1; else PreDysrhythmia=0;
+
+Dysrhythmia_out=max(Afib_out,Tachy_out,Aflu_out,Varr_out,Brady_out);
+t_Dysrhythmia=min(t_Afib,t_Tachy,t_Aflu,t_Varr,t_Brady);
+
+if max(PrePeri,PreMyo)>0 then PreInflammatory=1; else PreInflammatory=0;
+Inflammatory_out=max(Peri_out,Myo_out);
+t_Inflammatory=min(t_Peri,t_Myo);
+
+if max(PreACS,PreICM,PreAngina,PreMI)>0 then PreIschemic=1; else PreIschemic=0;
+Ischemic_out=max(ACS_out,ICM_out,Angina_out,MI_out);
+t_Ischemic=min(t_ACS,t_ICM,t_Angina,t_MI);
+
+if max(PreCS,PreHF,PreCarmyo,PreCA)>0 then PreOcardiac=1; else PreOcardiac=0;
+Ocardiac_out=max(CS_out,HF_out,Carmyo_out,CA_out);
+t_Ocardiac=min(t_CS,t_HF,t_Carmyo,t_CA);*/
+
+if max(prejoint, premyalgia, premyopathy)>0 then Premsk=1; else Premsk=0;
+msk_out=max(joint_out, myalgia_out, myopathy_out);
+t_msk=min(t_joint, t_myalgia, t_myopathy);
+
+if max(prefatigue, predizziness, presomnolence,presleep,prepressure,preGBS,PreADE, PreANHE, PreOther)>0 then Preother=1; else Preother=0;
+other_out=max(fatigue_out, dizziness_out, somnolence_out,sleep_out,pressure_out,GBS_out,ADE_out,ANHE_out,othere_out);
+t_other=min(t_fatigue, t_dizziness, t_somnolence,t_sleep,t_pressure,t_GBS,t_ADE,t_ANHE,t_othere);
+
+if max(preabnormal, prepark, pretremor, premyoclonus, predystonia)>0 then Premove=1; else Premove=0;
+move_out=max(abnormal_out, park_out, tremor_out, myoclonus_out, dystonia_out);
+t_move=min(t_abnormal, t_park, t_tremor, t_myoclonus, t_dystonia);
+
+if max(prefacial, prepoly, premono, preparesthesia,predysauto)>0 then Preperipheral=1; else Preperipheral=0;
+peripheral_out=max(facial_out, poly_out, mono_out, paresthesia_out, dysauto_out);
+t_peripheral=min(t_facial,t_poly, t_mono, t_paresthesia,t_dysauto);
+
+if max(preseizure, premigraine, preheadache)>0 then Preepisodic=1; else Preepisodic=0;
+episodic_out=max(seizure_out, migraine_out, headache_out);
+t_episodic=min(t_seizure, t_migraine, t_headache);
+
+if max(prealzheimer, preamnesia)>0 then Precognition=1; else Precognition=0;
+cognition_out=max(alzheimer_out, amnesia_out);
+t_cognition=min(t_alzheimer, t_amnesia);
+
+if max(presmell, pretaste, prehearing, prevision)>0 then PreSensory=1; else PreSensory=0;
+Sensory_out=max(smell_out, taste_out, hearing_out, vision_out);
+t_Sensory=min(t_smell, t_taste, t_hearing, t_vision);
+
+if max(preTCIA, prestroke)>0 then PreCere=1; else PreCere=0;
+Cere_out=max(TCIA_out, stroke_out);
+t_Cere=min(t_TCIA, t_stroke);
+
+if max(PreADE, PreANHE, PreOthere)>0 then PreEnceph=1; else PreEnceph=0;
+Enceph_out=max(ADE_out,ANHE_out,othere_out);
+t_Enceph=min(t_ADE,t_ANHE,t_othere);
+
+
+if max(preTCIA, prestroke, presmell, pretaste, prehearing, prevision, prealzheimer, preamnesia, preADE, preANHE, preothere, predysauto
+	  , preseizure, premigraine, preheadache, presleep,preGBS, prefacial, prepoly, premono, preparesthesia 
+      , prepressure, preabnormal, prepark, pretremor, premyoclonus, predystonia, prefatigue, predizziness 
+      ,  presomnolence,prejoint, premyalgia, premyopathy, preother)>0 then PreAny=1; else PreAny=0;
+
+Any_out=max(TCIA_out, stroke_out, smell_out, taste_out, hearing_out, vision_out, alzheimer_out, amnesia_out, 
+	   ADE_out, ANHE_out, othere_out, dysauto_out, seizure_out, migraine_out, headache_out, sleep_out, GBS_out,
+	   facial_out, poly_out, mono_out, paresthesia_out, pressure_out,
+	   park_out, abnormal_out, tremor_out, myoclonus_out, dystonia_out, fatigue_out, dizziness_out, somnolence_out,
+	   joint_out, myalgia_out,myopathy_out,other_out);
+t_Any=min(t_TCIA, t_stroke, t_smell, t_taste, t_hearing, t_vision, t_alzheimer, t_amnesia, t_ADE 
+	  , t_ANHE, t_othere, t_dysauto, t_seizure, t_migraine, t_headache, t_sleep, t_GBS, t_facial 
+	  , t_poly, t_mono, t_paresthesia,  t_pressure, t_park, t_abnormal,t_tremor, t_myoclonus 
+	  , t_dystonia, t_fatigue, t_dizziness, t_somnolence,t_joint, t_myalgia, t_myopathy,t_other);
+
+run; 
+
+
+

@@ -1,0 +1,162 @@
+libname data '/data/dart/2014/ORD_AlAly_201403107D/Evan/Projects/Long COVID CNS/Data';
+
+%macro subgroup(outcome,  name);
+
+data data.weightresult_&outcome ;
+set data.cohort;
+keep patienticn cohort cohort4arm pre&outcome t_&outcome &outcome._out ;
+run; 
+
+
+
+data cohort;
+set data.cohort ;
+where pre&outcome ^=1 ;
+run;
+
+
+
+/********************************************   CONTEMPORARY COMPARISON    *******************************************/
+
+*sort by largest RR;
+proc sort data=hdps;
+by descending rr_neg1;
+run;
+
+*pick top 100 with highest RR;
+data hdps;
+set hdps;
+if _n_<=100;
+run;
+
+*macro variable '&hdvs' of 100 high dimensional covariate names to use;
+data eee;
+set hdps;
+length cov $32767.;
+retain cov;
+cov=catx(' ',cov,_name_); 
+call symput('hdvs',cov);
+run;
+
+*select 100 high dimensional covariates;
+data contemp;
+set hxmodel_hba1c;
+where cohort ^="neg2";
+target=0;output;
+target=1;output;
+run;
+
+
+*predefined and hdvs covariates, get propensity score ;
+*do imputation and splines before this step;
+proc logistic data=contemp(where=(target=1 or cohort="pos"));
+class  sex race smoke longterm CVD Diabetes HTN CLD CKD ;
+model target(event="1") = 	sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X2-_X22 hxnin hyperlip &hdvs;
+output out=ps_pos (keep=patienticn cohort target ps_pos) pred=ps_pos;
+run;
+
+proc logistic data=contemp(where=(target=1 or cohort="neg1"));
+class  sex race smoke longterm CVD Diabetes HTN CLD CKD ;
+model target(event="1") = 	sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X2-_X22 hxnin hyperlip &hdvs;
+output out=ps_neg1 (keep=patienticn cohort target ps_neg1) pred=ps_neg1;
+run;
+
+
+data ps_sum;
+set ps_pos ps_neg1;
+where target=0;
+if cohort="neg1" then ate_&name._&outcome._cont=ps_neg1/(1-ps_neg1);
+if cohort="pos" then ate_&name._&outcome._cont=ps_pos/(1-ps_pos);
+if ate_&name._&outcome._cont>1000 then ate_&name._&outcome._cont=1000;
+keep patienticn cohort ate_&name._&outcome._cont ps_neg1 ps_pos;
+run;
+
+proc sort data=ps_sum;
+by patienticn cohort;
+run;
+data data.weightresult_&outcome;
+merge data.weightresult_&outcome (in=a) ps_sum;
+by PatientICN cohort;
+if a;
+run;
+
+/********************************************   HISTORICAL COMPARISON    *******************************************/
+
+proc sort data=hdps out=hdps2;
+by descending rr_neg2;
+run;
+
+data hdps2;
+set hdps2;
+if _n_<=100;
+run;
+
+data eee2;
+set hdps2;
+length cov $32767.;
+retain cov;
+cov=catx(' ',cov,_name_); 
+call symput('hdvs2',cov);
+run;
+
+*select 100 high dimensional covariates;
+data hist;
+set hxmodel_hba1c;
+if cohort^="neg2" then do;
+target=1; output; 
+end;
+if cohort^="neg1" then do;target=0;output;
+end;
+run;
+
+proc logistic data=hist(where=(target=1 or cohort="pos"));
+class  sex race smoke longterm CVD Diabetes HTN CLD CKD ;
+model target(event="1") = 	sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X2-_X22 hxnin hyperlip &hdvs2;
+output out=ps_pos (keep=patienticn cohort target ps_pos) pred=ps_pos;
+run;
+
+proc logistic data=hist(where=(target=1 or cohort="neg2"));
+class  sex race smoke longterm CVD Diabetes HTN CLD CKD ;
+model target(event="1") = 	sex race smoke longterm Diabetes HTN CLD CKD  CVD
+							_X2-_X22 hxnin hyperlip &hdvs2;
+output out=ps_neg2 (keep=patienticn cohort target ps_neg2) pred=ps_neg2;
+run;
+
+data ps_sum;
+set ps_pos ps_neg2;
+where target=0;
+if cohort="neg2" then ate_&name._&outcome._hist=ps_neg2/(1-ps_neg2);
+if cohort="pos" then ate_&name._&outcome._hist=ps_pos/(1-ps_pos);
+if ate_&name._&outcome._hist>1000 then ate_&name._&outcome._hist=1000;
+keep patienticn cohort ate_&name._&outcome._hist;
+run;
+
+proc sort data=ps_sum;
+by patienticn cohort;
+run;
+data data.weightresult_&outcome;
+merge data.weightresult_&outcome (in=a) ps_sum;
+by PatientICN cohort;
+if a;
+run;
+
+
+%mend;
+
+%let list= any;
+
+
+%macro loop(begin,end);
+%do q=&begin %to &end;
+%let manifest=%scan(&&list,&q);
+
+%subgroup (outcome=&&manifest  ,name=all);
+
+%end;
+%mend;
+
+%loop(1,1);
+
