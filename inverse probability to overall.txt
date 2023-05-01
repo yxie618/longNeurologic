@@ -82,7 +82,7 @@ if index(cohort,"neg2") then call symput("p2",percent/100);
 run;
 
 data ps_sum;
-merge ps_pos ps_neg1 ps_neg2;
+set ps;
 
 
 if cohort="pos" then ate_&name._&outcome._cont=&p0/(ps);
